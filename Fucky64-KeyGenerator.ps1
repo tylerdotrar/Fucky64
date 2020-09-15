@@ -1,7 +1,7 @@
 ﻿function Fucky64-KeyGenerator {
 #.SYNOPSIS
 # Calculates potential decryption keys for messages and files encrypted by 'Fucky64'
-# ARBITRARY VERSION NUMBER:  4.0.1
+# ARBITRARY VERSION NUMBER:  4.0.2
 # AUTHOR:  Tyler McCann (@tyler.rar)
 #
 #.DESCRIPTION
@@ -59,10 +59,8 @@
 
     if ($File) {
         
-        # Set $Message variable to encrypted file contents
         if (Test-Path -LiteralPath $File 2>$NULL) { $Message = (Get-Content -LiteralPath $File) }
 
-        # File location not found.
         else {
             Write-Host " File does not exist." -ForegroundColor Red
             return
@@ -72,6 +70,7 @@
     # Remove alphabet delimiters from encrypted message
     $NoAlphabet = $Message -Replace "[A-Z]"," "
     
+
     # Create array of segregated key-divided ASCII pieces (Message Pieces / Number of Tests)
     $MessageSegments = $NoAlphabet.split(" ")
     $NumberOfTests = $MessageSegments.count
@@ -81,12 +80,11 @@
     $SuccessfulKey = @()
     $MaxDigits = $Digits
 
+
     # Iterate every digit up to the max number of digits
     for ($Digit = 1; $Digit -le $MaxDigits; $Digit++) {
 
         $Dig = ("9" * $Digit) -as [int]
-        $NumDig = $Dig.Length
-
 
         # Iterate through each index of the message segments
         for ($Index = 0; $Index -lt $NumberOfTests; $Index++) {
@@ -114,7 +112,7 @@
             if ($VeryVerbose) {
                 Write-Host "`n $PotentialKeys Potential Key(s) found for Iteration $Digit Index[$index]!" -ForegroundColor Yellow
                 Write-Host "   Index[$index] = $EncSegment"
-                Write-Host "   Key Digits = $NumDig"
+                Write-Host "   Key Digits = $Digit"
             }
 
             # Skip to next iteration if no potential keys exist for a message index
