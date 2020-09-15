@@ -1,7 +1,7 @@
 ﻿function Fucky64 {
 #.SYNOPSIS
 # Convoluted integer-based key encryption / decryption of strings and files.
-# ARBITRARY VERSION NUMBER:  2.0.1
+# ARBITRARY VERSION NUMBER:  2.4.7
 # AUTHOR:  Tyler McCann (@tyler.rar)
 #
 #.DESCRIPTION
@@ -15,6 +15,9 @@
 # specified; set as the default.
 #
 # Supports alternate data streams (ADS).
+#
+# Recommendations:
+# -- Use 'FuckySuite.psm1' (and included instructions) from the repo to load this script from your $PROFILE.
 #
 # Parameters:
 #    -Encrypt       -->    Utilize encoding / encryption functionality
@@ -58,78 +61,58 @@
 
     # Encryption / Decryption Functions
     function Fucky64-Encrypt {
-        
-        Param (
-            [string] $Message,
-            [string] $File,
-            [int]    $Key,
-            [switch] $Verbose
-        )
-
-        $ErrorActionPreference = 'SilentlyContinue'
 
         if ($File) {
             
-            # Disable -Verbose switch
             $Verbose = $FALSE
 
             # Set $Message variable to file contents; convert formatting into unique strings for decrypting / decoding back into the original format
             if (Test-Path -LiteralPath $File 2>$NULL) {
 
-                $Message = ( (Get-Content -LiteralPath $File) -join '!!/NEWLINE\!!' ).replace("`t",'!!/TAB\!!').replace(">",'!!/GT\!!').replace("<",'!!/LT\!!')
+                $Message = ((Get-Content -LiteralPath $File) -join '!!/NEWLINE\!!' ).replace("`t",'!!/TAB\!!').replace(">",'!!/GT\!!').replace("<",'!!/LT\!!')
 
                 # Detect if input $File is an Alternate Data Stream
                 if ((Get-Item -LiteralPath $File).PSChildName -like "*:*") { $ADSbool = $TRUE }
             }
 
-            # File location not found.
             else {
                 Write-Host "File does not exist." -ForegroundColor Red
                 break
             }
         }
 
-        # Convert message contents to base64
+
+        # Convert message contents to base64 and modify output
 	    $64text = [convert]::ToBase64String([System.Text.encoding]::Unicode.GetBytes($Message))
-
-        # Convert base64 to modified base64
 	    $ModifiedText = $64text.replace("A","+").replace("B","-").replace("=","!")
-
-        # Convert modifed base64 to a character array
-	    $ArrayText = $ModifiedText.ToCharArray()
         
-	    $Increment = 0
+
+        # Segregate modified base64 into even and odd character arrays and append into a string
 	    $EvenArray = @()
 	    $OddArray = @()
-	    $FlippedArray = @()
         
-        # Segregate modified base64 into even and odd character arrays
-	    foreach ($Char in $ArrayText) {
-
-            if ($Increment%2 -eq 0) { $OddArray += $Char }
-    	    else { $EvenArray += $Char }
-
-            $Increment += 1
-	    }
+        for ($CharIndex = 0; $CharIndex -lt $ModifiedText.Length; $CharIndex += 2) {
+            
+            $OddArray += $ModifiedText[$CharIndex]
+            $EvenArray += $ModifiedText[$CharIndex + 1]
+        }
         
-
-        # Append even and odd character arrays
-	    $FlippedArray += $EvenArray + $OddArray
-        $Segregated = $FlippedArray -join ""
+        $Segregated = ($EvenArray + $OddArray) -join ""
 
 
-        # Convert segregated string to hexadecimal array
-	    $HexText = @()
-	    foreach ($Char in $FlippedArray) {
-            $HexText += " " + [System.String]::Format("{0:X}", [System.Convert]::ToUInt32($Char))
+        # Convert segregated string to hexadecimal strings (spaced and conjoined)
+	    $HexArray = @()
+
+        for ($CharIndex = 0; $CharIndex -lt $Segregated.Length; $CharIndex++) {
+            $HexArray += [System.String]::Format("{0:X}", [System.Convert]::ToUInt32($Segregated[$CharIndex]))
 	    }
 
-        
-        # Create hexadecimal strings (spaced and conjoined)
-	    $SpacedHex = ($HexText -join "").Substring(1)
-        $JoinedHex = $SpacedHex.replace(" ","")
+        $SpacedHex = $HexArray -join " "
+        $JoinedHex = $SpacedHex -replace " ",""
+
 
         ### Encoding and encryption split into different processes ###
+
 
         # Start Encryption Process
         if ($Key) {
@@ -138,74 +121,58 @@
             $SpacedASCII = [byte[]][char[]]$JoinedHex
             $JoinedASCII = $SpacedASCII -join ""
 
+
             # Create 8 character ASCII substrings
             $ASCIIarray = @()
-            $Conjoin = ""
-            for ($Index = 1; $Index -lt ($SpacedASCII.count + 1); $Index++) {
 
-                $Conjoin += $SpacedASCII[$Index - 1]
-
-                if (($Index%4 -eq "0") -or ($Index -eq $SpacedASCII.count)) {
-                    $ASCIIarray += $Conjoin
-                    $Conjoin = ""  
-                }
+            for ($CharIndex = 0; $CharIndex -lt $JoinedASCII.Length; $CharIndex += 8) {
+                $ASCIIarray += $JoinedASCII[$CharIndex..($CharIndex+7)] -join ""
             }
+            
 
-            # Divide each substring by the key
+            # Divide each substring by the key and segregate into even and odd arrays.
             $FuckyPreFlip = @()
-            foreach ($Section in $ASCIIarray) { $FuckyPreFlip += $Section / $Key }
 
-            $FinalIncrement = 0
+            foreach ($Substring in $ASCIIarray) { $FuckyPreFlip += $Substring / $Key }
+
 	        $FinalEvenArray = @()
 	        $FinalOddArray = @()
-	        $FinalFlippedArray = @()
             
-            # Segregate key-divided substrings into even and odd arrays
-	        foreach ($Item in $FuckyPreFlip) {
-
-                if ($FinalIncrement%2 -eq 0) { $FinalOddArray += $Item }
-    	        else { $FinalEvenArray += $Item }
-
-                $FinalIncrement += 1
-	        }
-
-	        $FinalFlippedArray += $FinalEvenArray + $FinalOddArray
+            for ($SubstringIndex = 0; $SubstringIndex -lt $FuckyPreFlip.Count; $SubstringIndex += 2) {
             
-            # Randomly generate alphabetical delimiter
-            $Joiner = (65..90) | Get-Random | % { [char]$_ }
+                $FinalOddArray += $FuckyPreFlip[$SubstringIndex]
+                $FinalEvenArray += $FuckyPreFlip[$SubstringIndex + 1]
+            }
 
-            # Final encrypted string
-            $EncryptedMsg = $FinalFlippedArray -join "$Joiner"
+            $FinalFlippedArray = $FinalEvenArray + $FinalOddArray
+
+
+            # Generate random alphabetical delimiter and create final message
+            $Delim = (65..90) | Get-Random | % { [char]$_ }
+            $EncryptedMsg = $FinalFlippedArray -join "$Delim"
         }
 
         # Start Encoding Process
         else {
             
-            # Convert conjoined hexadecimal string to second base64
+            # Convert conjoined hexadecimal string to second base64 and modify output
 	        $64ception = [convert]::ToBase64String([System.Text.encoding]::Unicode.GetBytes($JoinedHex))
-
-            # Convert second base64 to modified second base64
 	        $Modified64ception = $64ception.replace("A","+").replace("B","-").replace("=","!")
 
-            $FinalIncrement = 0
+            
+            # Create second even and odd array mix and create final message
 	        $FinalEvenArray = @()
 	        $FinalOddArray = @()
-            $Final64 = @()
-            $Modified64Array = $Modified64ception.ToCharArray()
-
-            # Segregate second modified base64 array into even and odd character arrays
-            foreach ($Item in $Modified64Array) {
-
-                if ($FinalIncrement%2 -eq 0) { $FinalOddarray += $Item }
-    	        else { $FinalEvenArray += $Item }
-
-                $FinalIncrement += 1
+            
+            for ($CharIndex = 0; $CharIndex -lt $Modified64ception.Length; $CharIndex += 2) {
+            
+                $FinalOddArray += $Modified64ception[$CharIndex]
+                $FinalEvenArray += $Modified64ception[$CharIndex + 1]
             }
 
-            # Final encoded string
-            $Final64 += $FinalEvenArray + $FinalOddArray
-            $EncodedMsg = $Final64 -join ""
+            $EncodedMsg = ($FinalEvenArray + $FinalOddArray) -join ""
         }
+
 
         # Return (MESSAGE)
         if (!$File) {
@@ -213,29 +180,29 @@
             # Display step-by-step encryption / encoding process (messages only)
             if ($Verbose) {
 
-                Write-Host "`n Cleartext:" -ForegroundColor Yellow ;       Write-Host " $Message"
-                if ($Key) { Write-Host "`n Key:" -ForegroundColor Yellow ; Write-Host " $Key" }
+                Write-Host "`n Cleartext:"       -ForegroundColor Yellow ;  Write-Host " $Message"
+                if ($Key) { Write-Host "`n Key:" -ForegroundColor Yellow ;  Write-Host " $Key" }
 
-	            Write-Host "`n Message             -->   Base64: " -ForegroundColor Yellow ;          Write-Host " $64text"
-	            Write-Host "`n Base64              -->   Modified Base64: " -ForegroundColor Yellow ; Write-Host " $ModifiedText"
-	            Write-Host "`n Modified Base64     -->   Segregated-64: " -ForegroundColor Yellow ;   Write-Host " $Segregated"
-	            Write-Host "`n Segregated-64       -->   Hexadecimal: " -ForegroundColor Yellow ;     Write-Host " $SpacedHex"
-                Write-Host "`n Hexadecimal         -->   Conjoined Hex: " -ForegroundColor Yellow ;   Write-Host " $JoinedHex"
+	            Write-Host "`n Message             -->   Base64: "          -ForegroundColor Yellow ;         Write-Host " $64text"
+	            Write-Host "`n Base64              -->   Modified Base64: " -ForegroundColor Yellow ;         Write-Host " $ModifiedText"
+	            Write-Host "`n Modified Base64     -->   Segregated-64: "   -ForegroundColor Yellow ;         Write-Host " $Segregated"
+	            Write-Host "`n Segregated-64       -->   Hexadecimal: "     -ForegroundColor Yellow ;         Write-Host " $SpacedHex"
+                Write-Host "`n Hexadecimal         -->   Conjoined Hex: "   -ForegroundColor Yellow ;         Write-Host " $JoinedHex"
 
                 if ($Key) {
-                    Write-Host "`n Conjoined Hex       -->   Conjoined ASCII:" -ForegroundColor Yellow ;  Write-Host " $JoinedASCII"
-                    Write-Host "`n Conjoined ASCII     -->   ASCII Substrings:" -ForegroundColor Yellow ; Write-Host " $ASCIIarray"
-                    Write-Host "`n ASCII Substrings    -->   Fucky64 Pre-Flip: "-ForegroundColor Yellow ; Write-Host " $FuckyPreFlip"
-                    Write-Host "`n Fucky64 Encrypted Message: " -ForegroundColor Yellow ;                 Write-Host " $EncryptedMsg `n"
+                    Write-Host "`n Conjoined Hex       -->   Conjoined ASCII:"   -ForegroundColor Yellow ;    Write-Host " $JoinedASCII"
+                    Write-Host "`n Conjoined ASCII     -->   ASCII Substrings:"  -ForegroundColor Yellow ;    Write-Host " $ASCIIarray"
+                    Write-Host "`n ASCII Substrings    -->   Fucky64 Pre-Flip: " -ForegroundColor Yellow ;    Write-Host " $FuckyPreFlip"
+                    Write-Host "`n Fucky64 Encrypted Message: "                  -ForegroundColor Yellow ;    Write-Host " $EncryptedMsg `n"
                 }
 
 	            else {
-                    Write-Host "`n Conjoined Hex       -->   64-Ception:" -ForegroundColor Yellow ;          Write-Host " $64ception"
-	                Write-Host "`n 64-Ception          -->   Modified 64-Ception:" -ForegroundColor Yellow ; Write-Host " $Modified64ception"
-                    Write-Host "`n Fucky64 Encoded Message:" -ForegroundColor Yellow ;                       Write-Host " $EncodedMsg `n"
+                    Write-Host "`n Conjoined Hex       -->   64-Ception:"          -ForegroundColor Yellow ;  Write-Host " $64ception"
+	                Write-Host "`n 64-Ception          -->   Modified 64-Ception:" -ForegroundColor Yellow ;  Write-Host " $Modified64ception"
+                    Write-Host "`n Fucky64 Encoded Message:"                       -ForegroundColor Yellow ;  Write-Host " $EncodedMsg `n"
                 }
-                
             }
+
 
             # Only return the final encrypted / encoded message
             else {
@@ -245,11 +212,13 @@
             }
         }
 
+
         # Return (FILE)
         else {
             
             # Encrypted File
             if ($Key) {
+
                 if ($ADSbool) {
                     Set-Content -LiteralPath $File -Value $EncryptedMsg
                     Write-Host "ADS successfully encrypted." -ForegroundColor Yellow
@@ -261,8 +230,10 @@
                 }
             }
             
+
             # Encoded File
             else {
+
                 if ($ADSbool) {
                     Set-Content -LiteralPath $File -Value $EncodedMsg
                     Write-Host "ADS successfully encoded." -ForegroundColor Yellow
@@ -274,22 +245,10 @@
             }
         }
     }
-
     function Fucky64-Decrypt {
-        
-        Param (
-            [string] $Message,
-            [string] $File,
-            [int]    $Key,
-            [switch] $Verbose,
-            [switch] $Invoke
-        )
-
-        $ErrorActionPreference= 'SilentlyContinue'
 
         if ($File) {
             
-            # Disable -Verbose switch
             $Verbose = $FALSE
 
             # Set $Message variable to encoded / encrypted file contents
@@ -301,133 +260,101 @@
                 if ((Get-Item -LiteralPath $File).PSChildName -like "*:*") { $ADSbool = $TRUE }
             }
 
-            # File location not found.
             else {
                 Write-Host "File does not exist." -ForegroundColor Red
                 break
             }
         }
 
+
         # Start Decryption Process
         if ($Key) {
 
             $EncryptedMsg = $Message
             
-            # Remove alphabet delimiters from encrypted message
+            # Remove alphabet delimiters from encrypted message and create array (segregated key-divided ASCII pieces)
             $NoAlphabet = $EncryptedMsg -Replace "[A-Z]", " "
+            $KeyedSegments = $NoAlphabet.split(" ")
 
-            # Create array of segregated key divided ASCII pieces
-            $MixedKeyArray = $NoAlphabet.split(" ")
 
-            $KeyedItemNum = $MixedKeyArray.count
-            $KeyIncrement = 0
+            # Create even and odd (key-divided ASCII) substring array and create unsegregated (aka original order) array
             $KeyEvenArray = @()
             $KeyOddArray = @()
-
-            # Create even and odd arrays from segregated key divided ASCII array
-            foreach ($Piece in $MixedKeyArray) {
-
-                if ($KeyIncrement -lt ($KeyedItemNum / 2) ) { $KeyEvenArray += $Piece }
-                else { $KeyOddArray += $Piece }
-
-                $KeyIncrement += 1
-            }
-
-            # Create unsegregated key divided ASCII array (Original Order)
             $FuckyPreFlip = @()
 
-            for ($Index = 0; $Index -lt $KeyedItemNum; $Index++) {
-                $FuckyPreFlip += $KeyOddArray[$Index]
-                $FuckyPreFlip += $KeyEvenArray[$Index]
+            for ($Substring = 0; $Substring -lt $KeyedSegments.Count; $Substring++ ) {
+
+                if ($Substring -lt ($KeyedSegments.Count / 2) ) { $KeyEvenArray += $KeyedSegments[$Substring] }
+                else { $KeyOddArray += $KeyedSegments[$Substring] }
             }
 
-            # Multiply each keyed ASCII piece by the key to get original ASCII value
+            for ($Substring = 0; $Substring -lt $KeyedSegments.count; $Substring++) {
+
+                $FuckyPreFlip += $KeyOddArray[$Substring]
+                $FuckyPreFlip += $KeyEvenArray[$Substring]
+            }
+
+
+            # Multiply each keyed ASCII substring by the key to get original ASCII string
             $DekeyedASCII = @()
 
-            for ($Index = 0; $Index -lt $KeyedItemNum; $Index++) {
+            for ($Substring = 0; $Substring -lt $KeyedSegments.count; $Substring++) {
 
-                $KeyedMsgPiece = [double]$FuckyPreFlip[$Index]
-                $DekeyedMsgPiece = $KeyedMsgPiece * $Key
+                $KeyedSubstring = [double]$FuckyPreFlip[$Substring]
+                $DekeyedSubstring = $KeyedSubstring * $Key
 
-                $TinyFix = [math]::Round($DekeyedMsgPiece)
+                $TinyFix = [math]::Round($DekeyedSubstring)
                 $DekeyedASCII += $TinyFix
             }
             
-            # Create conjoined dekeyed ASCII string
             $JoinedASCII = $DekeyedASCII -join ""
+
 
             # Split conjoined ASCII string into 8 character arrays; ONLY used for verbosity
             if ($Verbose) {
 
-                $ASCIIarray = ""
-                for ($Index = 1; $Index -le $JoinedASCII.length; $Index++) {
+                $ASCIIarray = @()
 
-                    $ASCIIarray += $JoinedASCII[$Index - 1]
-                    if ($Index%8 -eq "0") { $ASCIIarray += " " }
+                for ($CharIndex = 0; $CharIndex -lt $JoinedASCII.Length; $CharIndex += 8) {
+                    $ASCIIarray += $JoinedASCII[$CharIndex..($CharIndex+7)] -join ""
                 }
             }
 
-            $Counter = 0
-            $ASCII = ""
-            $JoinedHex = @()
 
             # Convert ASCII to conjoined hexadecimal string
-            for ($Index = 0; $Index -lt $JoinedASCII.length; $Index++) {
+            $JoinedHex = @()
 
-                $ASCII += $JoinedASCII[$Index]
-                $Counter += 1
-
-                if ($Counter -eq "2") {
-                    $Hex = [char[]][byte[]]$ASCII
-                    $JoinedHex += $Hex
-                    $Counter = 0
-                    $ASCII = ""
-                }
+            for ($ASCIIchar = 0; $ASCIIchar -lt $JoinedASCII.Length; $ASCIIchar += 2) {
+                
+                $ASCIIbyte = $JoinedAscii[$ASCIIchar..($ASCIIchar+1)] -join ""
+                $HexCharacter = [char[]][byte[]]$ASCIIbyte
+                $JoinedHex += $HexCharacter
             }
 
             $JoinedHex = $JoinedHex -join ""
-            $Counter = 0
-            $SpacedHex = ""
-
-            # Split conjoined hexadecimal string into separated hex bytes
-            for ($Index = 0; $Index -lt $JoinedHex.length; $Index++) {
-
-                $SpacedHex += $JoinedHex[$Index]
-                $Counter += 1
-
-                if ($Counter -eq "2") {
-                    $SpacedHex += " "
-                    $Counter = 0
-                }
-            }
         }
+
 
         # Start Decoding Process
         else {
 
             $EncodedMsg = $Message
 
-            # Create character array from encoded message
-            $MessageContents = $EncodedMsg.ToCharArray()
-            $CharCount = $MessageContents.Count
-
-            $Increment = 0
+            # Spit encoded message in half (creating even and odd character arrays)
 	        $EvenArray = @()
 	        $OddArray = @()
-            
-            # Create even and odd character arrays from encoded message array
-            foreach ($Char in $MessageContents) {
 
-                if ($Increment -lt ($CharCount / 2) ) { $EvenArray += $Char }
-                else { $OddArray += $Char }
+            for ($CharIndex = 0; $CharIndex -lt $EncodedMsg.Length; $CharIndex++) {
 
-                $Increment += 1
+                if ($CharIndex -lt ($EncodedMsg.Length / 2) ) { $EvenArray += $EncodedMsg[$CharIndex] }
+                else { $OddArray += $EncodedMsg[$CharIndex] }
             }
+
 
             # Create unsegregated modified base64 message (Original Order)
             $Modified64ception = @()
 
-            for ($Index = 0; $Index -lt $CharCount; $Index++) {
+            for ($Index = 0; $Index -lt $EncodedMsg.Length; $Index++) {
 
                 $Modified64ception += $OddArray[$Index]
                 $Modified64ception += $EvenArray[$Index]
@@ -435,69 +362,58 @@
 
             $Modified64ception = $Modified64ception -join ""
 
-            # Convert Modified Base64 to Normal Base64
+
+            # Unmodify base64 and convert to hexadecimal
             $64ception = $Modified64ception.replace("+","A").replace("-","B").replace("!","=")
-
-            # Convert Base64 to hexadecimal
             $JoinedHex = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($64ception))
-
-            # Split conjoined hexadecimal string into separated hex bytes
-            $SpacedHex = @()
-            $TempConjoinedArr = $JoinedHex.ToCharArray()
-            $Increment = 0
-
-            for ($Index = 0; $Index -lt $TempConjoinedArr.length; $Index++) {
-
-                $SpacedHex += $TempConjoinedArr[$Index]
-                $Increment += 1
-
-                if ($Increment -eq 2) {
-                    $SpacedHex += " "
-                    $Increment = 0
-                }
-            }
-
-            $SpacedHex = $SpacedHex -join ""
         }
 
+
         ### Decoding and decryption converge into the same process ###
+
+
+        # Split conjoined hexadecimal string into separated hex bytes
+        $SpacedHex = @()
+
+        for ($HexIndex = 0; $HexIndex -lt $JoinedHex.Length; $HexIndex += 2) {
+            $SpacedHex += $JoinedHex[$HexIndex..($HexIndex+1)] -join ""
+        }
+
+        $SpacedHex = $SpacedHex -join " "
+
 
         # Convert hexadecimal bytes back into segregated modified base64
         $Segregated = $SpacedHex -split ' ' | % {[char][byte]"0x$_"}
         $Segregated = $Segregated -join ""
 
-        # Create even and odd arrays from segregated modified base64
-        $TempSegArray = $Segregated.ToCharArray()
 
-        $CharNum = $TempSegArray.count
-        $FinalIncrement = 0
+        # Split segregated modified base64 array in half (creating even and odd arrays)
         $FinalEvenArray = @()
         $FinalOddArray = @()
 
-        foreach ($Char in $TempSegArray) {
+        for ($CharIndex = 0; $CharIndex -lt $Segregated.Length; $CharIndex++) {
 
-            if ($FinalIncrement -lt ($CharNum / 2) ) { $FinalEvenArray += $Char }
-            else { $FinalOddArray += $Char }
-
-            $FinalIncrement += 1
+            if ($CharIndex -lt ($Segregated.Length / 2) ) { $FinalEvenArray += $Segregated[$CharIndex] }
+            else { $FinalOddArray += $Segregated[$CharIndex] }
         }
 
 
         # Create unsegregated modified base64 string (Original Order)
         $ModifiedText = @()
 
-        for ($Index = 0; $Index -lt $CharNum; $Index++) {
+        for ($Index = 0; $Index -lt $Segregated.Length; $Index++) {
+
             $ModifiedText += $FinalOddArray[$Index]
             $ModifiedText += $FinalEvenarray[$Index]
         }
 
         $ModifiedText = $ModifiedText -join ""
 
-        # Convert modified base64 to original base64
-        $64text = $ModifiedText.replace("+","A").replace("-","B").replace("!","=")
 
-        # Convert base64 message to cleartext
+        # Unmodify to original base64 and convert to original message
+        $64text = $ModifiedText.replace("+","A").replace("-","B").replace("!","=")
         $Cleartext = [System.Text.Encoding]::Unicode.GetString([System.Convert]::FromBase64String($64text))
+
 
         # If message isn't cleartext OR initial hex string not valid characters, decryption failed
         if (!$Cleartext -or ($JoinedHex -notmatch '^[A-Z0-9]+$')) {
@@ -508,6 +424,7 @@
             return
         }
 
+
         # Return (MESSAGE)
         if (!$File) {
             
@@ -515,41 +432,45 @@
             if ($Verbose) {
 
                 if ($Key) {
-                    Write-Host "`n Fucky64 Encrypted Message:" -ForegroundColor Yellow ;                  Write-Host " $EncryptedMsg"
-                    Write-Host "`n Encrypted Message   -->   Fucky64 Pre-Flip:" -ForegroundColor Yellow ; Write-Host " $FuckyPreFlip" 
-                    Write-Host "`n Fucky64 Pre-Flip    -->   ASCII Substrings:" -ForegroundColor Yellow ; Write-Host " $ASCIIarray"
-                    Write-Host "`n ASCII Substrings    -->   Conjoined ASCII:" -ForegroundColor Yellow ;  Write-Host " $JoinedASCII"
-                    Write-Host "`n Conjoined ASCII     -->   Conjoined Hex:" -ForegroundColor Yellow ;    Write-Host " $JoinedHex"
+                    Write-Host "`n Fucky64 Encrypted Message:"                  -ForegroundColor Yellow ;     Write-Host " $EncryptedMsg"
+                    Write-Host "`n Encrypted Message   -->   Fucky64 Pre-Flip:" -ForegroundColor Yellow ;     Write-Host " $FuckyPreFlip" 
+                    Write-Host "`n Fucky64 Pre-Flip    -->   ASCII Substrings:" -ForegroundColor Yellow ;     Write-Host " $ASCIIarray"
+                    Write-Host "`n ASCII Substrings    -->   Conjoined ASCII:"  -ForegroundColor Yellow ;     Write-Host " $JoinedASCII"
+                    Write-Host "`n Conjoined ASCII     -->   Conjoined Hex:"    -ForegroundColor Yellow ;     Write-Host " $JoinedHex"
                 }
 
                 else {
-	                Write-Host "`n Fucky64 Encoded Message:" -ForegroundColor Yellow ;                       Write-Host " $EncodedMsg"
-                    Write-Host "`n Encoded Message     -->   Modified 64-Ception:" -ForegroundColor Yellow ; Write-Host " $Modified64ception"
-                    Write-Host "`n Modified 64-Ception -->   64-Ception:" -Foregroundcolor Yellow ;          Write-Host " $64ception"
-                    Write-Host "`n 64-Ception          -->   Conjoined Hex:" -ForegroundColor Yellow ;       Write-Host " $JoinedHex"
+	                Write-Host "`n Fucky64 Encoded Message:"                       -ForegroundColor Yellow ;  Write-Host " $EncodedMsg"
+                    Write-Host "`n Encoded Message     -->   Modified 64-Ception:" -ForegroundColor Yellow ;  Write-Host " $Modified64ception"
+                    Write-Host "`n Modified 64-Ception -->   64-Ception:"          -Foregroundcolor Yellow ;  Write-Host " $64ception"
+                    Write-Host "`n 64-Ception          -->   Conjoined Hex:"       -ForegroundColor Yellow ;  Write-Host " $JoinedHex"
                 }
 
-                Write-Host "`n Conjoined Hex       -->   Hexadecimal:" -ForegroundColor Yellow ;     Write-Host " $SpacedHex"
-	            Write-Host "`n Hexadecimal         -->   Segregated-64:" -ForegroundColor Yellow ;   Write-Host " $Segregated"
-	            Write-Host "`n Segregated-64       -->   Modified Base64:" -ForegroundColor Yellow ; Write-Host " $ModifiedText"
-	            Write-Host "`n Modified Base64     -->   Base64:" -ForegroundColor Yellow ;          Write-Host " $64text"
+                Write-Host "`n Conjoined Hex       -->   Hexadecimal:"     -ForegroundColor Yellow ;          Write-Host " $SpacedHex"
+	            Write-Host "`n Hexadecimal         -->   Segregated-64:"   -ForegroundColor Yellow ;          Write-Host " $Segregated"
+	            Write-Host "`n Segregated-64       -->   Modified Base64:" -ForegroundColor Yellow ;          Write-Host " $ModifiedText"
+	            Write-Host "`n Modified Base64     -->   Base64:"          -ForegroundColor Yellow ;          Write-Host " $64text"
 
-                if ($Key) { Write-Host "`n Key:" -ForegroundColor Yellow ; Write-Host " $Key" }
-	            Write-Host "`n Cleartext:" -ForegroundColor Yellow ;       Write-Host " $Cleartext `n"
+                if ($Key) { Write-Host "`n Key:" -ForegroundColor Yellow ;  Write-Host " $Key" }
+	            Write-Host "`n Cleartext:"       -ForegroundColor Yellow ;  Write-Host " $Cleartext `n"
             }
+
 
             # Invoke successfully decrypted / decoded PowerShell code
             elseif ($Invoke) { Invoke-Expression -Command $Cleartext }
+
 
             # Only return decrypted / decoded message contents.
             else { return $Cleartext }
         }
         
+
         # Return (FILE)
         else {
             
             # Replace unique formatting strings with original file formatting.
             $FinalOutput = (Write-Output $Cleartext).replace('!!/NEWLINE\!!',"`r`n").replace('!!/TAB\!!',"`t").replace('!!/GT\!!',">").replace('!!/LT\!!',"<")
+
 
             # Alternate Data Stream
             if ($ADSbool) {
@@ -574,31 +495,10 @@
     if ($Help) { return Get-Help Fucky64 }
 
 
-    # Probably not the most efficient way of doing this.
+    $ErrorActionPreference = 'SilentlyContinue'
     if ($Decrypt) { $Encrypt = $FALSE }
 
 
-    # Invoke Encoding / Encryption
-    if ($Encrypt) {
-        
-        $Command = 'Fucky64-Encrypt -Message $Message -File $File -Key $Key'
-        if ($Verbose) { $Command += ' -Verbose' }
-
-
-        $Output = Invoke-Expression $Command
-    }
-
-
-    # Invoke Decoding / Decryption
-    elseif ($Decrypt) {
-
-        $Command = 'Fucky64-Decrypt -Message $Message -File $File -Key $Key'
-        if ($Verbose) { $Command += ' -Verbose' }
-        elseif ($Invoke) { $Command += ' -Invoke' }
-
-
-        $Output = Invoke-Expression $Command
-    }
-
-    return $Output
+    if ($Encrypt) { return Fucky64-Encrypt }
+    elseif ($Decrypt) { return Fucky64-Decrypt }
 }
