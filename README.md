@@ -4,7 +4,7 @@ text files, or even encrypt them using an integer based key.
 
 # Preface
 First and foremost, the encryption process is **VERY** slow -- this is **NOT** time efficient -- I
-simply deem it `security via tedium`.  I started working on this one day after work with zero
+simply deem it *"security via tedium"*.  I started working on this one day after work with zero
 intention of it going this far; it just slowly progressed into more and more unncessarily complex
 and convoluted obfuscation mostly out of humor.
 
@@ -51,6 +51,11 @@ Parameters include `-Message`, `-File`, `-Digits`, `-Keys`, `-Verbose`, `-VeryVe
 ![Key-Generator Gif](https://cdn.discordapp.com/attachments/620986290317426698/755518403233710130/Fucky64-KeyGenerator.gif)
 
 **Higher Res GIF: https://gfycat.com/weegrippingfirefly**
+
+# Recommendations
+To automatically load `Fucky64.ps1` and `Fucky64-KeyGenerator.ps1` into every PowerShell session, I
+included simple script module called `FuckySuite.psm1` -- just pull the Fucky64 repository into a directory
+of your choice and copy the command in the note header of **FuckySuite** into your user **$PROFILE**.
 
 # Encryption Process
 
